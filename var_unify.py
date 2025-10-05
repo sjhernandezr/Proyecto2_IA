@@ -1,4 +1,4 @@
-import logic_types
+from logic_types import Predicate, Term
 
 def unify_terms(term1, term2, sustitution = None):
     if sustitution is None:

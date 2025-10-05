@@ -1,10 +1,13 @@
-hechos = [
-    Predicado("Hombre", [Termino("Marco")]),
-    Predicado("Pompeyano", [Termino("Marco")]),
-    Predicado("Gobernante", [Termino("Cesar")]),
-    Predicado("IntentaAsesinar", [Termino("Marco"), Termino("Cesar")]),
+from logic_types import Predicate, Term
+
+facts = [
+    Predicate("Hombre", [Term("Marco")]),
+    Predicate("Pompeyano", [Term("Marco")]),
+    Predicate("Gobernante", [Term("Cesar")]),
+    Predicate("IntentaAsesinar", [Term("Marco"), Term("Cesar")]),
 ]
-reglas = {
+
+rules = {
     "pompeyano_es_romano": {
         "premisa": "Pompeyano(x)",
         "conclusion": "Romano(x)"
