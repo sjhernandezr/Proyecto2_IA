@@ -1,0 +1,217 @@
+class Term:
+    def __init__(self, name, is_variable=None):
+        self.name = name.strip()
+        if is_variable is None:
+            vars_set = {"x", "y", "z", "u", "v", "w"}
+            self.is_variable = self.name in vars_set or self.name.startswith("?")
+        else:
+            self.is_variable = bool(is_variable)
+    def __eq__(self, other):
+        return isinstance(other, Term) and self.name == other.name and self.is_variable == other.is_variable
+    def __hash__(self):
+        return hash((self.name, self.is_variable))
+    def __str__(self):
+        return self.name
+
+class Predicate:
+    def __init__(self, name, args):
+        self.name = name.strip()
+        self.args = list(args)
+    def __eq__(self, other):
+        return isinstance(other, Predicate) and self.name == other.name and self.args == other.args
+    def __hash__(self):
+        return hash((self.name, tuple(self.args)))
+    def __str__(self):
+        inside = ", ".join(str(a) for a in self.args)
+        return f"{self.name}({inside})"
+
+process = []
+
+class Clause:
+    def __init__(self, literals):
+        process.append("Creating new clause...")
+        self.literals = literals
+    def __str__(self):
+        clause_str = []
+        for is_positive, predicate in self.literals:
+            if not is_positive:
+                clause_str.append("¬")
+            clause_str.append(str(predicate))
+        return " ∨ ".join(clause_str)
+    def is_empty(self):
+        process.append("Checking if clause is empty...")
+        return len(self.literals) == 0
+
+def convert_to_clause(predicado, is_positive=True):
+    process.append("Converting predicate to unitary clause...")
+    if not is_positive:
+        process.append(f"Negating predicate: ¬{str(predicado)}")
+    else:
+        process.append(f"Keeping positive predicate: {str(predicado)}")
+    return Clause([(is_positive, predicado)])
+
+def _parse_literal(texto):
+    neg = texto.startswith("¬")
+    core = texto[1:] if neg else texto
+    nombre = core.split("(")[0].strip()
+    termos = core.split("(")[1].rstrip(")").split(",")
+    args = [Term(t.strip()) for t in termos]
+    return neg, Predicate(nombre, args)
+
+def convert_rule_to_clauses(rule):
+    process.append("Converting rules into implications in NCF...")
+    premises = [p.strip() for p in rule["premisa"].split(" ∧ ")] if rule["premisa"].strip() else []
+    conclusions = [c.strip() for c in rule["conclusion"].split(" v ")] if rule["conclusion"].strip() else []
+    all_clauses = []
+    premise_literals = []
+    for premisa in premises:
+        neg, pred = _parse_literal(premisa)
+        if neg:
+            premise_literals.append((True, pred))
+        else:
+            premise_literals.append((False, pred))
+    for conclusion in conclusions:
+        clause_literals = list(premise_literals)
+        neg, pred = _parse_literal(conclusion)
+        if neg:
+            clause_literals.append((False, pred))
+        else:
+            clause_literals.append((True, pred))
+        all_clauses.append(Clause(clause_literals))
+    return all_clauses
+
+def substitute_term(term, substitution):
+    if hasattr(term, "is_variable") and term.is_variable and term.name in substitution:
+        return substitution[term.name]
+    return term
+
+def substitute_predicate(pred, substitution):
+    return Predicate(pred.name, [substitute_term(a, substitution) for a in pred.args])
+
+def unify_terms(t1, t2, substitution=None):
+    if substitution is None:
+        substitution = {}
+    t1 = substitute_term(t1, substitution)
+    t2 = substitute_term(t2, substitution)
+    if t1 == t2:
+        return substitution
+    if hasattr(t1, "is_variable") and t1.is_variable:
+        substitution[t1.name] = t2
+        return substitution
+    if hasattr(t2, "is_variable") and t2.is_variable:
+        substitution[t2.name] = t1
+        return substitution
+    return None
+
+def unify_predicates(p1, p2, substitution=None):
+    if substitution is None:
+        substitution = {}
+    if p1.name != p2.name:
+        return None
+    if len(p1.args) != len(p2.args):
+        return None
+    for a1, a2 in zip(p1.args, p2.args):
+        substitution = unify_terms(a1, a2, substitution)
+        if substitution is None:
+            return None
+    return substitution
+
+def are_complementary(literal1, literal2):
+    is_positive1, pred1 = literal1
+    is_positive2, pred2 = literal2
+    if is_positive1 == is_positive2:
+        return None
+    if pred1.name != pred2.name:
+        return None
+    substitution = unify_predicates(pred1, pred2, {})
+    if substitution is not None:
+        process.append(f"Found complementary literals: {pred1.name}")
+        process.append(f"One positive and one negative: {is_positive1} vs {is_positive2}")
+    return substitution
+
+def resolve_clauses(clause1, clause2):
+    process.append("Searching for complementary literals between clauses...")
+    for i, lit1 in enumerate(clause1.literals):
+        for j, lit2 in enumerate(clause2.literals):
+            substitution = are_complementary(lit1, lit2)
+            if substitution is not None:
+                process.append("Complementary literals found! Generating resolvent...")
+                new_literals = clause1.literals[:i] + clause1.literals[i+1:]
+                new_literals += clause2.literals[:j] + clause2.literals[j+1:]
+                applied = []
+                for pol, pr in new_literals:
+                    pr_sub = substitute_predicate(pr, substitution)
+                    applied.append((pol, pr_sub))
+                if applied:
+                    process.append("Non-empty resolvent generated")
+                    return Clause(applied)
+                else:
+                    process.append("Empty clause generated! (Contradiction found)")
+                    return Clause([])
+    process.append("No complementary literals found")
+    return None
+
+def resolution_refutation(hechos, reglas, objetivo):
+    process.append("Starting refutation resolution algorithm...")
+    clausulas = []
+    process.append("Converting known facts to clauses...")
+    for hecho in hechos:
+        c = convert_to_clause(hecho)
+        clausulas.append(c)
+        process.append(f"Converted fact: {str(c)}")
+    process.append("Converting rules to conjunctive normal form...")
+    for nombre_regla, regla in reglas.items():
+        process.append(f"Processing rule: {nombre_regla}")
+        nuevas = convert_rule_to_clauses(regla)
+        clausulas.extend(nuevas)
+        for c in nuevas:
+            process.append(f"Generated clause: {str(c)}")
+    process.append("Adding negation of goal for refutation...")
+    neg_goal = convert_to_clause(objetivo, False)
+    clausulas.append(neg_goal)
+    process.append(f"Negated goal: {str(neg_goal)}")
+    resueltas = set()
+    process.append("Starting resolution process...")
+    while True:
+        nuevas_clausulas = []
+        for i, clause1 in enumerate(clausulas):
+            for clause2 in clausulas[i+1:]:
+                process.append("Attempting to resolve clauses:")
+                process.append(f"Clause 1: {str(clause1)}")
+                process.append(f"Clause 2: {str(clause2)}")
+                resolvente = resolve_clauses(clause1, clause2)
+                if resolvente is not None:
+                    if not resolvente.literals:
+                        process.append("Empty clause found! Contradiction detected.")
+                        return True, clausulas
+                    sr = str(resolvente)
+                    if sr not in resueltas:
+                        process.append(f"New resolvent clause: {sr}")
+                        resueltas.add(sr)
+                        nuevas_clausulas.append(resolvente)
+        if not nuevas_clausulas:
+            process.append("No more clauses can be generated. No contradiction found.")
+            return False, clausulas
+        process.append("Adding new clauses to the set...")
+        clausulas.extend(nuevas_clausulas)
+
+def text_file_output(clausulas, process_lines):
+    with open('Clauses and Process.txt', 'w') as t:
+        for clausula in clausulas:
+            t.write(str(clausula) + '\n')
+        t.write('\n')
+        for p in process_lines:
+            t.write(p + '\n')
+
+x = Term("x")
+c = Term("c")
+hechos = [Predicate("B", [c])]
+reglas = {"r1": {"premisa": "B(x)", "conclusion": "M(x)"}, "r2": {"premisa": "M(x)", "conclusion": "P(x)"}}
+objetivo = Predicate("P", [c])
+resultado, clausulas_finales = resolution_refutation(hechos, reglas, objetivo)
+print("Refutation success:", resultado)
+for c_ in clausulas_finales:
+    print(str(c_))
+for p in process:
+    print(p)
+text_file_output(clausulas_finales, process)
