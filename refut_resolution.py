@@ -97,64 +97,74 @@ def resolve_clauses(clause1, clause2):
     return None
 
 def resolution_refutation(hechos, reglas, objetivo):
+    print("[DEBUG] Starting refutation resolution algorithm...")
     process.append("Starting refutation resolution algorithm...")
-    
     clausulas = []
     process.append("Converting known facts to clauses...")
+    print(f"[DEBUG] Facts: {hechos}")
     for hecho in hechos:
         clausulas.append(convert_to_clause(hecho))
         process.append(f"Converted fact: {str(clausulas[-1])}")
-    
+    print(f"[DEBUG] Initial clauses after facts: {[str(c) for c in clausulas]}")
     process.append("Converting rules to conjunctive normal form...")
+    print(f"[DEBUG] Rules: {reglas}")
     for nombre_regla, regla in reglas.items():
         process.append(f"Processing rule: {nombre_regla}")
         nuevas_clausulas = convert_rule_to_clauses(regla)
         clausulas.extend(nuevas_clausulas)
         for c in nuevas_clausulas:
             process.append(f"Generated clause: {str(c)}")
-    
+    print(f"[DEBUG] Clauses after rules: {[str(c) for c in clausulas]}")
     process.append("Adding negation of goal for refutation...")
     clausulas.append(convert_to_clause(objetivo, False))
     process.append(f"Negated goal: {str(clausulas[-1])}")
-    
+    print(f"[DEBUG] Clauses after negated goal: {[str(c) for c in clausulas]}")
     resueltas = set()
     process.append("Starting resolution process...")
-    
+    print("[DEBUG] Entering main resolution loop...")
+    max_iterations = 1000
+    iteration = 0
     while True:
+        iteration += 1
+        print(f"[DEBUG] Iteration {iteration}, clauses: {len(clausulas)}")
+        if iteration > max_iterations:
+            print("[DEBUG] Max iterations reached. Exiting to prevent infinite loop.")
+            process.append("Max iterations reached. Exiting to prevent infinite loop.")
+            return False, clausulas
         nuevas_clausulas = []
-        
         for i, clause1 in enumerate(clausulas):
             for clause2 in clausulas[i+1:]:
                 process.append(f"Attempting to resolve clauses:")
                 process.append(f"Clause 1: {str(clause1)}")
                 process.append(f"Clause 2: {str(clause2)}")
-                
                 resolvente = resolve_clauses(clause1, clause2)
                 if resolvente is not None:
                     if not resolvente.literals:
                         process.append("Empty clause found! Contradiction detected.")
-                        return True
-                    
-                    str_resolvente = str(resolvente)
-                    if str_resolvente not in resueltas:
-                        process.append(f"New resolvent clause: {str_resolvente}")
-                        resueltas.add(str_resolvente)
+                        print(f"[DEBUG] Contradiction found at iteration {iteration}.")
+                        return True, clausulas
+                    sr = str(resolvente)
+                    if sr not in resueltas:
+                        process.append(f"New resolvent clause: {sr}")
+                        resueltas.add(sr)
                         nuevas_clausulas.append(resolvente)
-        
         if not nuevas_clausulas:
             process.append("No more clauses can be generated. No contradiction found.")
-            return False
-
+            print(f"[DEBUG] No more clauses can be generated. Exiting at iteration {iteration}.")
+            return False, clausulas
         process.append("Adding new clauses to the set...")
+        print(f"[DEBUG] Adding {len(nuevas_clausulas)} new clauses.")
         clausulas.extend(nuevas_clausulas)
 
 def text_file_output(clausulas, process):
     with open('Clauses and Process.txt', 'w' ) as t:
         for clausula in clausulas:
-            t.write(clausula + '\n')
+            t.write(str(clausula) + '\n')
         t.write('\n')
         for proceso in process:
-            t.write(proceso + '\n')
+            t.write(str(proceso) + '\n')
+
+
 
 
 
